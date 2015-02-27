@@ -1,0 +1,282 @@
+<html>
+	<head>
+	</head>
+	<body>
+
+    <style>
+        /* generic page styles */
+        body { font-family: sans-serif; }
+        textarea {
+            width: 30em;
+            height: 8em;
+            line-height: 1em;
+            padding: 0.5em;
+        }
+        input, button { padding: 0.5em; }
+
+        .mention-entry,
+        .tag-entry
+        {
+            display: inline-block;
+        }
+
+        /* custom text complete styles */
+        .dropdown-menu {
+            background: none repeat scroll 0 0 #eee;
+            border: 1px solid #000;
+            cursor: pointer;
+            line-height: 1.2em;
+            list-style: outside none none;
+            padding: 0;
+        }
+
+        .dropdown-menu li {
+            background: none repeat scroll 0 0 #fff;
+            margin: 0.5em;
+            padding: 0.5em;
+        }
+
+        .dropdown-menu li:hover {
+            background: none repeat scroll 0 0 #aaa;
+        }
+
+        /* custom templates */
+        .tag-entry-name {
+            padding: 0;
+            margin: 0;
+            font-weight: bold;
+        }
+        .tag-entry-description {
+            font-size: 0.8em;
+            margin: 0;
+            padding: 0;
+        }
+    </style>
+
+    <h2>With Custom Mention Strategy</h2>
+    <textarea id="strategy-based-textcomplete" data-bind="textComplete: { strategies: [mentionStrategy], options: { maxCount: 5 } }"></textarea>
+    <p>If you put an @ symbol in at any point it will attempt to auto complete from the list below, feel free to add or remove more at runtime and see how it acts.</p>
+
+    <h2>With Simple Token Strategy</h2>
+    <textarea id="token-based-textcomplete" data-bind="tokenComplete: { token: '#', search: tagSearch, options: { maxCount: 5 } }"></textarea>
+    <p>If you put an # symbol in at any point it will attempt to auto complete from the list below, feel free to add or remove more at runtime and see how it acts.</p>
+
+    <h2>With Complex Token Strategy</h2>
+    <textarea id="complex-token-based-textcomplete" data-bind="tokenComplete: { token: '#', search: complexTagSearch, replace: tagReplace, template: tagTemplate, options: { maxCount: 5 } }"></textarea>
+    <p>If you put an # symbol in at any point it will attempt to auto complete from the list below with a custom template and custom replacing mechanism.</p>
+    <p>As custom templates deal with view related concerns I have kept the logic for that outside of the VM, however you can put it where you want.</p>
+
+    <h2>With Multiple Strategies</h2>
+    <textarea id="multiple-strategy-based-textcomplete" data-bind="textComplete: { strategies: [mentionStrategy, tagStrategy], options: { maxCount: 5 } }"></textarea>
+    <p>If you put an @ symbol in you will get mentions, if you put a # you get tags.</p>
+
+
+    <fieldset>
+        <legend>Mentions</legend>
+        <h3>Create New Mention</h3>
+        <input id="new-first-name" data-bind="value: newMention.firstname" placeholder="First Name"/>
+        <input id="new-surname" data-bind="value: newMention.surname" placeholder="Surname"/>
+        <button id="add-new-mention" data-bind="click: addMention">Add New Mention</button>
+        <h3>Mention List</h3>
+        <div id="mentions-list" data-bind="foreach: mentions">
+            <div class="mention-entry">
+                <input class="first-name" data-bind="value: firstname" />
+                <input class="surname-name" data-bind="value: surname" />
+                <button class="delete-mention" data-bind="click: $parent.deleteMention">Delete</button>
+            </div>
+        </div>
+    </fieldset>
+
+    <fieldset>
+        <legend>Tags</legend>
+        <h3>Create New Tag</h3>
+        <input id="tag-name" data-bind="value: newTag.name" placeholder="Name"/>
+        <input id="tag-description" data-bind="value: newTag.description" placeholder="Description"/>
+        <button id="add-new-tag" data-bind="click: addTag">Add New Tag</button>
+        <h3>Tag List</h3>
+        <div id="tag-list" data-bind="foreach: tags">
+            <div class="tag-entry">
+                <input class="tag-name" data-bind="value: name" />
+                <input class="tag-description" data-bind="value: description" />
+                <button class="delete-tag" data-bind="click: $parent.deleteTag">Delete</button>
+            </div>
+        </div>
+    </fieldset>
+
+    <script src="libs/jquery-2.1.3.min.js" type="text/javascript"></script>
+    <script src="libs/jquery.textcomplete.min.js" type="text/javascript"></script>
+    <script src="libs/knockout-3.3.0.min.js" type="text/javascript"></script>
+    <script src="src/knockout.textcomplete.js" type="text/javascript"></script>
+    <script src="example-libs/from.js" type="text/javascript"></script>
+    <script type="text/javascript">
+
+    </script>
+
+
+        <script>
+            function Person(firstname, surname)
+            {
+                this.firstname = ko.observable(firstname);
+                this.surname = ko.observable(surname);
+
+                this.fullname = ko.computed(function(){
+                    return this.firstname() + " " + this.surname();
+                }, this);
+
+                this.mentionTag = ko.computed(function(){
+                    return this.firstname() + this.surname();
+                }, this);
+            }
+
+            function Tag(name, description)
+            {
+                this.name = ko.observable(name);
+                this.description = ko.observable(description);
+            }
+
+            tagTemplate = function(value) { return '<div class="tag-entry-name">' + value.name() + '</div><p class="tag-entry-description">' + value.description() + '</p>'; }
+            tagReplace = function(value) { return "$1#" + value.name(); }
+
+            function CreateMentionStrategy(mentions) {
+                var mentionMatch = /(^|\s)@(\w*)$/;
+
+                var mentionSearch = function(term, callback){
+                    var wherePredicate = function(mentionEntry) {
+                        return mentionEntry.fullname().toLowerCase().indexOf(term.toLowerCase()) >= 0;
+                    };
+
+                    var matches = from(mentions())
+                            .where(wherePredicate)
+                            .orderBy("$.firstname()")
+                            .toArray();
+
+                    callback(matches);
+                };
+
+                var mentionReplace = function(value){
+                    return "$1@" + value.mentionTag() + " ";
+                };
+
+                var mentionTemplate = function(value) {
+                  return value.fullname();
+                };
+
+                return ko.textComplete.createStrategy(mentionMatch, mentionSearch, mentionReplace, 2, mentionTemplate);
+            }
+
+            function CreateTagStrategy(tags) {
+                var tagMatch = /(^|\s)#(\w*)$/;
+
+                var tagSearch = function(term, callback){
+                    var wherePredicate = function(tag) {
+                        return tag.name().toLowerCase().indexOf(term.toLowerCase()) >= 0;
+                    };
+
+                    var results = from(tags())
+                            .where(wherePredicate)
+                            .orderBy("$.name()")
+                            .toArray();
+
+                    callback(results);
+                };
+
+
+                return ko.textComplete.createStrategy(tagMatch, tagSearch, tagReplace, 2, tagTemplate);
+            }
+
+
+            function ViewModel()
+            {
+                var self = this;
+
+                self.newMention = new Person();
+
+                self.mentions = ko.observableArray([
+                    new Person("Stannis", "Baratheon"),
+                    new Person("Robert", "Baratheon"),
+                    new Person("Eddard", "Stark"),
+                    new Person("Rob", "Stark"),
+                    new Person("Arya", "Stark"),
+                    new Person("Daenerys", "Targaryen"),
+                    new Person("Joffrey", "Baratheon"),
+                    new Person("Roose", "Bolton"),
+                    new Person("Ramsey", "Bolton"),
+                    new Person("Balon", "Greyjoy"),
+                    new Person("Theon", "Greyjoy"),
+                    new Person("Cersei", "Lannister"),
+                    new Person("Jamie", "Lannister")
+                ]);
+
+                self.deleteMention = function(mention) {
+                    self.mentions.remove(mention);
+                };
+
+                self.addMention = function() {
+                    var savedMention = new Person(self.newMention.firstname(), self.newMention.surname());
+                    self.mentions.push(savedMention);
+                    self.newMention.firstname("");
+                    self.newMention.surname("");
+                };
+
+                self.newTag = new Tag();
+
+                self.tags = ko.observableArray([
+                    new Tag("actionscript", "A language used in Flash"),
+                    new Tag("c#", "A language used on the .net platform"),
+                    new Tag("c++", "An object oriented language derived from C"),
+                    new Tag("clojure", "A language with functional elements that targets jvm, clr or js"),
+                    new Tag("go", "A new language with channels for concurrency"),
+                    new Tag("java", "A cross platform language with ownership issues"),
+                    new Tag("javascript", "A bit like Marmite"),
+                    new Tag("python", "Indents as far as the eye can see"),
+                    new Tag("ruby", "A dynamic cross platform language"),
+                    new Tag("typescript", "A compile2js language")
+                ]);
+
+                self.deleteTag = function(tag) {
+                    self.tags.remove(tag);
+                };
+
+                self.addTag = function() {
+                    var savedTag = new Tag(self.newTag.name(), self.newTag.description());
+                    self.tags.push(savedTag);
+                    self.newTag.name("");
+                    self.newTag.description("");
+                };
+
+                self.mentionStrategy = CreateMentionStrategy(self.mentions);
+                self.tagStrategy = CreateTagStrategy(self.tags);
+
+                self.tagSearch = function(term, callback) {
+                    var wherePredicate = function(tag) {
+                        return tag.name().toLowerCase().indexOf(term.toLowerCase()) >= 0;
+                    };
+
+                    var results = from(self.tags())
+                                    .where(wherePredicate)
+                                    .select("$.name()")
+                                    .orderBy("$")
+                                    .toArray();
+
+                    callback(results);
+                };
+
+                self.complexTagSearch = function(term, callback) {
+                    var wherePredicate = function(tag) {
+                        return tag.name().toLowerCase().indexOf(term.toLowerCase()) >= 0;
+                    };
+
+                    var results = from(self.tags())
+                            .where(wherePredicate)
+                            .orderBy("$.name()")
+                            .toArray();
+
+                    callback(results);
+                };
+            }
+
+
+            ko.applyBindings(new ViewModel());
+        </script>
+	</body>
+</html>
